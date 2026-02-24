@@ -1,0 +1,7 @@
+.env
+venv/
+venv2/
+__pycache__/
+*.pyc
+.cache_*.json
+.mcp.json
