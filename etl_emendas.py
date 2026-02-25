@@ -95,6 +95,23 @@ def carregar_cache_politicos():
     print(f"  {total} políticos ({len(cpf_to_id)} com CPF, {len(nome_to_pid)} com nome)")
 
 
+def parse_brl_number(val):
+    """Parse Brazilian number format '1.234.567,89' to float."""
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+    if not isinstance(val, str):
+        return None
+    val = val.strip()
+    if not val:
+        return None
+    try:
+        return float(val.replace(".", "").replace(",", "."))
+    except (ValueError, TypeError):
+        return None
+
+
 def find_politico_by_name(autor):
     """Try to match an emenda author to a politico_id by name."""
     if not autor:
@@ -189,10 +206,10 @@ def fetch_emendas_ano(ano):
 
             autor = emenda.get("nomeAutor", "") or emenda.get("autor", "")
             tipo = emenda.get("tipoEmenda", "")
-            valor_emp = emenda.get("valorEmpenhado")
-            valor_liq = emenda.get("valorLiquidado")
-            valor_pago = emenda.get("valorPago")
-            localidade = emenda.get("localidade", "")
+            valor_emp = parse_brl_number(emenda.get("valorEmpenhado"))
+            valor_liq = parse_brl_number(emenda.get("valorLiquidado"))
+            valor_pago = parse_brl_number(emenda.get("valorPago"))
+            localidade = emenda.get("localidadeDoGasto", "") or emenda.get("localidade", "")
             funcao = emenda.get("funcao", "")
             subfuncao = emenda.get("subfuncao", "")
 
@@ -204,9 +221,9 @@ def fetch_emendas_ano(ano):
                 "ano": ano,
                 "codigo_emenda": str(codigo),
                 "tipo_emenda": tipo if tipo else None,
-                "valor_empenhado": float(valor_emp) if valor_emp else None,
-                "valor_liquidado": float(valor_liq) if valor_liq else None,
-                "valor_pago": float(valor_pago) if valor_pago else None,
+                "valor_empenhado": valor_emp,
+                "valor_liquidado": valor_liq,
+                "valor_pago": valor_pago,
                 "localidade": (localidade[:200] if localidade else None),
                 "funcao": (funcao[:100] if funcao else None),
                 "subfuncao": (subfuncao[:100] if subfuncao else None),
@@ -222,6 +239,13 @@ def fetch_emendas_ano(ano):
     if not records:
         print(f"  [{ano}] Nenhuma emenda encontrada")
         return 0
+
+    # Deduplicate by (codigo_emenda, ano) - keep last occurrence
+    seen = {}
+    for r in records:
+        key = (r["codigo_emenda"], r["ano"])
+        seen[key] = r
+    records = list(seen.values())
 
     matched = sum(1 for r in records if r["politico_id"])
     print(f"  [{ano}] {len(records)} emendas ({matched} com politico_id)")
