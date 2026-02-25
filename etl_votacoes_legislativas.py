@@ -6,7 +6,8 @@ Fontes: Câmara dos Deputados API + Senado Federal API
 """
 
 import os
-import hashlib
+import csv
+import io
 import requests
 import time
 from datetime import datetime
@@ -24,6 +25,7 @@ HEADERS = {
 }
 
 CAMARA_API = "https://dadosabertos.camara.leg.br/api/v2"
+CAMARA_BULK = "https://dadosabertos.camara.leg.br/arquivos"
 SENADO_API = "https://legis.senado.leg.br/dadosabertos"
 
 BATCH_SIZE = 500
@@ -34,6 +36,8 @@ START_LEG = int(os.getenv("START_LEG", "51"))
 END_LEG = int(os.getenv("END_LEG", "57"))
 
 cpf_to_id = {}
+nome_to_id = {}  # nome_upper -> politico_id (for senator name matching)
+dep_cpf_cache = {}  # dep_api_id -> cpf (cached across legislatures)
 
 
 # ============================================================
@@ -56,11 +60,6 @@ def retry_get(url, max_retries=3, timeout=60, **kwargs):
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
             time.sleep(2 ** attempt)
     return None
-
-
-def fake_cpf(nome, cargo, ano, src="TSE"):
-    h = hashlib.md5(f"{nome}|{cargo}|{ano}|{src}".encode()).hexdigest()
-    return ''.join(str(int(c, 16) % 10) for c in h[:11])
 
 
 def carregar_cache_politicos():
@@ -91,6 +90,64 @@ def carregar_cache_politicos():
         if len(data) < page_size:
             break
     print(f"  {total} políticos ({len(cpf_to_id)} com CPF)")
+
+
+def build_senator_name_cache():
+    """Build nome_upper -> politico_id from fato_politicos_mandatos + dim_politicos."""
+    global nome_to_id
+    print("Carregando cache de senadores por nome...")
+
+    # Step 1: Get all unique politico_ids for SENADOR mandatos
+    seen_pids = set()
+    offset = 0
+    page_size = 1000
+    while True:
+        url = (f"{SUPABASE_URL}/rest/v1/fato_politicos_mandatos"
+               f"?select=politico_id&cargo=eq.SENADOR"
+               f"&order=politico_id.asc&offset={offset}&limit={page_size}")
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=120)
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+        except Exception:
+            break
+        if not data:
+            break
+        for r in data:
+            seen_pids.add(r["politico_id"])
+        offset += len(data)
+        if len(data) < page_size:
+            break
+
+    if not seen_pids:
+        print("  0 senadores encontrados")
+        return
+
+    # Step 2: Fetch names from dim_politicos in batches
+    pid_list = sorted(seen_pids)
+    for i in range(0, len(pid_list), 200):
+        batch_pids = pid_list[i:i + 200]
+        pid_filter = ",".join(str(p) for p in batch_pids)
+        url = (f"{SUPABASE_URL}/rest/v1/dim_politicos"
+               f"?select=id,nome_completo,nome_urna"
+               f"&id=in.({pid_filter})")
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=120)
+            if resp.status_code != 200:
+                continue
+            for r in resp.json():
+                pid = r["id"]
+                nome = (r.get("nome_completo") or "").strip().upper()
+                nome_urna = (r.get("nome_urna") or "").strip().upper()
+                if nome_urna:
+                    nome_to_id[nome_urna] = pid
+                if nome and nome != nome_urna:
+                    nome_to_id[nome] = pid
+        except Exception:
+            continue
+
+    print(f"  {len(nome_to_id)} nomes mapeados ({len(seen_pids)} senadores)")
 
 
 def batch_insert_votos(records):
@@ -128,139 +185,143 @@ def batch_insert_votos(records):
 # Câmara dos Deputados - Votações
 # ============================================================
 
+def fetch_dep_cache_for_legislature(leg_id):
+    """Fetch deputy list and map dep_id -> politico_id via CPF from API."""
+    dep_cache = {}
+    deputados = []
+    pagina = 1
+    while True:
+        url = (f"{CAMARA_API}/deputados"
+               f"?idLegislatura={leg_id}"
+               f"&itens=100&pagina={pagina}&ordem=ASC&ordenarPor=nome")
+        resp = retry_get(url, timeout=30)
+        if not resp:
+            break
+        data = resp.json()
+        dados = data.get("dados", [])
+        if not dados:
+            break
+        deputados.extend(dados)
+        if not any(l.get("rel") == "next" for l in data.get("links", [])):
+            break
+        pagina += 1
+        time.sleep(REQUEST_DELAY)
+
+    seen = set()
+    for dep in deputados:
+        dep_id = dep.get("id")
+        if not dep_id or dep_id in seen:
+            continue
+        seen.add(dep_id)
+
+        # Check global cache first
+        if dep_id in dep_cpf_cache:
+            cpf = dep_cpf_cache[dep_id]
+            pid = cpf_to_id.get(cpf)
+            if pid:
+                dep_cache[dep_id] = pid
+            continue
+
+        # Fetch deputy detail to get CPF
+        detail_resp = retry_get(f"{CAMARA_API}/deputados/{dep_id}", timeout=30)
+        if detail_resp:
+            cpf_raw = (detail_resp.json().get("dados", {}).get("cpf") or "")
+            cpf = cpf_raw.strip().replace(".", "").replace("-", "").replace(" ", "")
+            if cpf and len(cpf) >= 10:
+                cpf = cpf.zfill(11)
+                dep_cpf_cache[dep_id] = cpf
+                pid = cpf_to_id.get(cpf)
+                if pid:
+                    dep_cache[dep_id] = pid
+        time.sleep(REQUEST_DELAY)
+
+    print(f"    {len(deputados)} deputados, {len(dep_cache)} mapeados")
+    return dep_cache
+
+
 def fetch_votacoes_camara():
-    """Fetch all roll call votes from Câmara API."""
+    """Fetch all roll call votes from Câmara using bulk CSV downloads."""
     print("\n" + "=" * 60)
-    print("CÂMARA DOS DEPUTADOS - Votações")
+    print("CÂMARA DOS DEPUTADOS - Votações (bulk CSV)")
     print("=" * 60)
 
     total = 0
     for leg_id in range(START_LEG, END_LEG + 1):
         print(f"\n  Legislatura {leg_id}...")
 
-        # Get ano range for this legislature
         ano_inicio = 1999 + (leg_id - 51) * 4
         ano_fim = ano_inicio + 3
 
-        # Build deputy name -> politico_id cache for this legislature
-        ano_eleicao = ano_inicio - 1
-        dep_cache = {}  # dep_id -> politico_id
+        # Build deputy cache for this legislature
+        dep_cache = fetch_dep_cache_for_legislature(leg_id)
 
-        # Fetch deputy list for legislature
-        deputados = []
-        pagina = 1
-        while True:
-            url = (f"{CAMARA_API}/deputados"
-                   f"?idLegislatura={leg_id}"
-                   f"&itens=100&pagina={pagina}&ordem=ASC&ordenarPor=nome")
-            resp = retry_get(url, timeout=30)
-            if not resp:
-                break
-            data = resp.json()
-            dados = data.get("dados", [])
-            if not dados:
-                break
-            deputados.extend(dados)
-            if not any(l.get("rel") == "next" for l in data.get("links", [])):
-                break
-            pagina += 1
-            time.sleep(REQUEST_DELAY)
-
-        # Map dep API id -> politico_id
-        seen = set()
-        for dep in deputados:
-            nome = (dep.get("nome") or "").strip()
-            dep_id = dep.get("id")
-            if not nome or not dep_id or dep_id in seen:
-                continue
-            seen.add(dep_id)
-            cpf_key = fake_cpf(nome, "DEPUTADO FEDERAL", ano_eleicao, "CAMARA")
-            pid = cpf_to_id.get(cpf_key)
-            if pid:
-                dep_cache[dep_id] = pid
-
-        print(f"    {len(deputados)} deputados, {len(dep_cache)} mapeados")
-
-        # Fetch votações by year range (API max 3-month intervals)
+        # Download votações metadata CSV and build votacao_id -> metadata map
         leg_votos = 0
         for ano in range(ano_inicio, min(ano_fim + 1, 2026)):
-            votacoes = []
-            # Split each year into quarters (API rejects >3 month range)
-            quarters = [
-                (f"{ano}-01-01", f"{ano}-03-31"),
-                (f"{ano}-04-01", f"{ano}-06-30"),
-                (f"{ano}-07-01", f"{ano}-09-30"),
-                (f"{ano}-10-01", f"{ano}-12-31"),
-            ]
-            for q_start, q_end in quarters:
-                pagina = 1
-                while True:
-                    url = (f"{CAMARA_API}/votacoes"
-                           f"?dataInicio={q_start}&dataFim={q_end}"
-                           f"&itens=200&pagina={pagina}&ordem=ASC&ordenarPor=dataHoraRegistro")
-                    resp = retry_get(url, timeout=30)
-                    if not resp:
-                        break
-                    data = resp.json()
-                    dados = data.get("dados", [])
-                    if not dados:
-                        break
-                    votacoes.extend(dados)
-                    if not any(l.get("rel") == "next" for l in data.get("links", [])):
-                        break
-                    pagina += 1
-                    time.sleep(REQUEST_DELAY)
+            # Download votacoes metadata
+            vot_meta = {}  # votacao_id -> {descricao, proposicao}
+            meta_url = f"{CAMARA_BULK}/votacoes/csv/votacoes-{ano}.csv"
+            meta_resp = retry_get(meta_url, timeout=120)
+            if meta_resp:
+                content = meta_resp.content.decode("utf-8-sig")
+                reader = csv.DictReader(io.StringIO(content), delimiter=";")
+                for row in reader:
+                    vot_id = (row.get("id") or "").strip()
+                    if vot_id:
+                        desc = (row.get("descricao") or "")[:300]
+                        prop = (row.get("ultimaApresentacaoProposicao_descricao") or "")[:200]
+                        vot_meta[vot_id] = {"descricao": desc, "proposicao": prop}
 
-            if not votacoes:
+            # Download bulk votes CSV
+            votos_url = f"{CAMARA_BULK}/votacoesVotos/csv/votacoesVotos-{ano}.csv"
+            votos_resp = retry_get(votos_url, timeout=120)
+            if not votos_resp:
+                print(f"    {ano}: CSV não disponível")
                 continue
 
-            # For each votação, fetch individual votes
-            records = []
-            for vot in votacoes:
-                vot_id = str(vot.get("id", ""))
-                data_raw = vot.get("dataHoraRegistro") or vot.get("data") or ""
-                data_vot = data_raw[:10] if data_raw else None
-                descricao = vot.get("descricao", "")
-                proposicao = vot.get("proposicao", "")
-                if isinstance(proposicao, dict):
-                    proposicao = proposicao.get("ementa", "")[:200] if proposicao else ""
+            content = votos_resp.content.decode("utf-8-sig")
+            reader = csv.DictReader(io.StringIO(content), delimiter=";")
 
-                # Fetch votos for this votação
-                url = f"{CAMARA_API}/votacoes/{vot_id}/votos"
-                resp = retry_get(url, timeout=30)
-                if not resp:
+            records = []
+            for row in reader:
+                dep_id_str = (row.get("deputado_id") or "").strip()
+                if not dep_id_str:
+                    continue
+                try:
+                    dep_id = int(dep_id_str)
+                except ValueError:
                     continue
 
-                votos_data = resp.json().get("dados", [])
-                for v in votos_data:
-                    dep_info = v.get("deputado_", {})
-                    dep_id = dep_info.get("id")
-                    pid = dep_cache.get(dep_id)
-                    if not pid:
-                        continue
+                pid = dep_cache.get(dep_id)
+                if not pid:
+                    continue
 
-                    voto = v.get("tipoVoto", "")
-                    if not voto:
-                        continue
+                voto = (row.get("voto") or "").strip()
+                if not voto:
+                    continue
 
-                    records.append({
-                        "politico_id": pid,
-                        "data_votacao": data_vot if data_vot else None,
-                        "votacao_id": f"CAM-{vot_id}",
-                        "voto": voto,
-                        "proposicao": (proposicao[:200] if proposicao else None),
-                        "descricao_votacao": (descricao[:300] if descricao else None),
-                        "fonte": "CAMARA",
-                    })
+                vot_id = (row.get("idVotacao") or "").strip()
+                data_raw = (row.get("dataHoraVoto") or "").strip()
+                data_vot = data_raw[:10] if data_raw else None
 
-                time.sleep(REQUEST_DELAY)
+                meta = vot_meta.get(vot_id, {})
+
+                records.append({
+                    "politico_id": pid,
+                    "data_votacao": data_vot,
+                    "votacao_id": f"CAM-{vot_id}",
+                    "voto": voto,
+                    "proposicao": (meta.get("proposicao") or None),
+                    "descricao_votacao": (meta.get("descricao") or None),
+                    "fonte": "CAMARA",
+                })
 
             if records:
                 n = batch_insert_votos(records)
                 leg_votos += n
-                print(f"    {ano}: {len(votacoes)} votações, {n} votos inseridos")
+                print(f"    {ano}: {len(vot_meta)} votações, {n} votos inseridos")
             else:
-                print(f"    {ano}: {len(votacoes)} votações, 0 votos")
+                print(f"    {ano}: 0 votos")
 
         total += leg_votos
         print(f"    TOTAL leg {leg_id}: {leg_votos:,}")
@@ -287,7 +348,7 @@ def fetch_votacoes_senado():
         ano_fim = ano_inicio + 3
         ano_eleicao = ano_inicio - 1
 
-        # Build senador name -> politico_id cache
+        # Build senador name -> politico_id cache via name matching
         sen_cache = {}  # nome_normalizado -> politico_id
         url = f"{SENADO_API}/senador/lista/legislatura/{leg_id}"
         resp = retry_get(url, timeout=30, headers={"Accept": "application/json"})
@@ -302,10 +363,12 @@ def fetch_votacoes_senado():
                 for p in parlams:
                     ident = p.get("IdentificacaoParlamentar", {})
                     nome = ident.get("NomeParlamentar", "").strip()
+                    nome_completo = ident.get("NomeCompletoParlamentar", "").strip()
                     if not nome:
                         continue
-                    cpf_key = fake_cpf(nome, "SENADOR", ano_eleicao, "SENADO")
-                    pid = cpf_to_id.get(cpf_key)
+                    # Try matching by nome_urna first, then full name
+                    pid = (nome_to_id.get(nome.upper())
+                           or nome_to_id.get(nome_completo.upper()))
                     if pid:
                         sen_cache[nome.upper()] = pid
             except Exception:
@@ -423,6 +486,7 @@ if __name__ == "__main__":
     print("=" * 60)
 
     carregar_cache_politicos()
+    build_senator_name_cache()
 
     total_camara = fetch_votacoes_camara()
     total_senado = fetch_votacoes_senado()
