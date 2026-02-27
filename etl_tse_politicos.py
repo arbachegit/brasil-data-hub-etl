@@ -375,7 +375,7 @@ def detectar_colunas_tabela():
             except Exception:
                 try:
                     supabase.table("dim_politicos").insert(
-                        {"cpf": "__TESTE__", "nome": "TESTE"}
+                        {"cpf": "__TESTE__", "nome_completo": "TESTE"}
                     ).execute()
                     r2 = supabase.table("dim_politicos").select("*").limit(1).execute()
                     colunas = set(r2.data[0].keys()) if r2.data else set()
@@ -405,11 +405,11 @@ def finalizar_registros(politicos, colunas_tabela):
     # Suporta ambos schemas (original e novo)
     MAPA_COLUNAS = {
         'cpf': 'cpf',
-        'nome': 'nome_completo' if 'nome_completo' in colunas_tabela else 'nome',
+        'nome': 'nome_completo',
         'nome_urna': 'nome_urna',
         'nome_social': 'nome_social',
         'data_nascimento': 'data_nascimento',
-        'genero': 'sexo' if 'sexo' in colunas_tabela else 'genero',
+        'genero': 'sexo',
         'titulo_eleitoral': 'titulo_eleitoral',
         'cor_raca': 'cor_raca',
         'grau_instrucao': 'grau_instrucao',
