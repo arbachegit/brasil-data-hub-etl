@@ -35,8 +35,8 @@ HEADERS = {
 TSE_CAND_URL = "https://cdn.tse.jus.br/estatistica/sead/odsele/consulta_cand"
 TSE_MAP_URL = "https://cdn.tse.jus.br/estatistica/sead/odsele/municipio_tse_ibge/municipio_tse_ibge.zip"
 
-ANOS_GERAIS = [1998, 2002, 2006, 2010, 2014, 2018, 2022]
-ANOS_MUNICIPAIS = [2000, 2004, 2008, 2012, 2016, 2020, 2024]
+ANOS_GERAIS = [1994, 1998, 2002, 2006, 2010, 2014, 2018, 2022]
+ANOS_MUNICIPAIS = [1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024]
 TODOS_ANOS = sorted(set(ANOS_GERAIS + ANOS_MUNICIPAIS))
 
 CARGOS_VALIDOS = {
@@ -64,7 +64,7 @@ POL_BATCH_SIZE = 200  # Smaller batches for politician upsert (return=representa
 REQUEST_DELAY = 0.1
 
 # Ano inicial (para reprocessar apenas anos pendentes)
-START_YEAR = int(os.getenv("START_YEAR", "1998"))
+START_YEAR = int(os.getenv("START_YEAR", "1994"))
 
 # Caches globais
 cpf_to_id = {}  # cpf -> politico_id
