@@ -79,3 +79,28 @@ CREATE TABLE IF NOT EXISTS fato_emendas_parlamentares (
 
 CREATE INDEX IF NOT EXISTS idx_emendas_politico ON fato_emendas_parlamentares(politico_id);
 CREATE INDEX IF NOT EXISTS idx_emendas_ano ON fato_emendas_parlamentares(ano);
+
+-- 6. Perfil de filiação partidária (dados agregados TSE)
+CREATE TABLE IF NOT EXISTS fato_perfil_filiacao_partidaria (
+  id BIGSERIAL PRIMARY KEY,
+  ano_mes INTEGER NOT NULL,
+  sigla_partido TEXT NOT NULL,
+  nome_partido TEXT,
+  uf TEXT NOT NULL,
+  cod_municipio TEXT,
+  nome_municipio TEXT,
+  zona INTEGER,
+  genero TEXT,
+  faixa_etaria TEXT,
+  estado_civil TEXT,
+  grau_instrucao TEXT,
+  ocupacao TEXT,
+  raca_cor TEXT,
+  qt_filiados INTEGER NOT NULL,
+  hash_key TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_filiacao_partido ON fato_perfil_filiacao_partidaria(sigla_partido);
+CREATE INDEX IF NOT EXISTS idx_filiacao_uf ON fato_perfil_filiacao_partidaria(uf);
+CREATE INDEX IF NOT EXISTS idx_filiacao_ano_mes ON fato_perfil_filiacao_partidaria(ano_mes);
