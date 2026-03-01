@@ -40,13 +40,21 @@ ANOS_MUNICIPAIS = [1996, 2000, 2004, 2008, 2012, 2016, 2020, 2024]
 TODOS_ANOS = sorted(set(ANOS_GERAIS + ANOS_MUNICIPAIS))
 
 CARGOS_VALIDOS = {
-    "PRESIDENTE", "VICE-PRESIDENTE",
-    "GOVERNADOR", "VICE-GOVERNADOR",
-    "SENADOR", "1º SUPLENTE", "2º SUPLENTE",
+    "PRESIDENTE", "VICE-PRESIDENTE", "VICE PRESIDENTE",
+    "GOVERNADOR", "VICE-GOVERNADOR", "VICE GOVERNADOR",
+    "SENADOR", "1º SUPLENTE", "2º SUPLENTE", "SUPLENTE DE SENADOR",
     "DEPUTADO FEDERAL", "DEPUTADO ESTADUAL", "DEPUTADO DISTRITAL",
-    "PREFEITO", "VICE-PREFEITO", "VEREADOR",
+    "PREFEITO", "VICE-PREFEITO", "VICE PREFEITO", "VEREADOR",
 }
-CARGOS_MUNICIPAIS = {"PREFEITO", "VICE-PREFEITO", "VEREADOR"}
+CARGOS_MUNICIPAIS = {"PREFEITO", "VICE-PREFEITO", "VICE PREFEITO", "VEREADOR"}
+
+# Normalizar nomes de cargo antigos (1994/1996) para formato padrão
+CARGO_NORMALIZE = {
+    "VICE PRESIDENTE": "VICE-PRESIDENTE",
+    "VICE GOVERNADOR": "VICE-GOVERNADOR",
+    "VICE PREFEITO": "VICE-PREFEITO",
+    "SUPLENTE DE SENADOR": "1º SUPLENTE",
+}
 
 UF_IBGE = {
     "AC": 12, "AL": 27, "AM": 13, "AP": 16, "BA": 29, "CE": 23,
@@ -365,6 +373,7 @@ def processar_tse_ano(ano):
                         cargo_tse = row[idx.get("DS_CARGO", 14)]
                         if cargo_tse not in CARGOS_VALIDOS:
                             continue
+                        cargo_tse = CARGO_NORMALIZE.get(cargo_tse, cargo_tse)
 
                         nome = row[idx.get("NM_CANDIDATO", 17)].strip()
                         if not nome:
