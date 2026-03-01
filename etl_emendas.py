@@ -206,9 +206,13 @@ def fetch_emendas_ano(ano):
 
             autor = emenda.get("nomeAutor", "") or emenda.get("autor", "")
             tipo = emenda.get("tipoEmenda", "")
+            numero = emenda.get("numeroEmenda", "")
             valor_emp = parse_brl_number(emenda.get("valorEmpenhado"))
             valor_liq = parse_brl_number(emenda.get("valorLiquidado"))
             valor_pago = parse_brl_number(emenda.get("valorPago"))
+            valor_resto_insc = parse_brl_number(emenda.get("valorRestoInscrito"))
+            valor_resto_canc = parse_brl_number(emenda.get("valorRestoCancelado"))
+            valor_resto_pg = parse_brl_number(emenda.get("valorRestoPago"))
             localidade = emenda.get("localidadeDoGasto", "") or emenda.get("localidade", "")
             funcao = emenda.get("funcao", "")
             subfuncao = emenda.get("subfuncao", "")
@@ -221,9 +225,13 @@ def fetch_emendas_ano(ano):
                 "ano": ano,
                 "codigo_emenda": str(codigo),
                 "tipo_emenda": tipo if tipo else None,
+                "numero_emenda": (numero if numero else None),
                 "valor_empenhado": valor_emp,
                 "valor_liquidado": valor_liq,
                 "valor_pago": valor_pago,
+                "valor_resto_inscrito": valor_resto_insc,
+                "valor_resto_cancelado": valor_resto_canc,
+                "valor_resto_pago": valor_resto_pg,
                 "localidade": (localidade[:200] if localidade else None),
                 "funcao": (funcao[:100] if funcao else None),
                 "subfuncao": (subfuncao[:100] if subfuncao else None),

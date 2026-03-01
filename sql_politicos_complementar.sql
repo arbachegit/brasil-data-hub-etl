@@ -80,6 +80,13 @@ CREATE TABLE IF NOT EXISTS fato_emendas_parlamentares (
 CREATE INDEX IF NOT EXISTS idx_emendas_politico ON fato_emendas_parlamentares(politico_id);
 CREATE INDEX IF NOT EXISTS idx_emendas_ano ON fato_emendas_parlamentares(ano);
 
+-- 5b. Colunas adicionais de emendas (enriquecimento via API)
+ALTER TABLE fato_emendas_parlamentares
+  ADD COLUMN IF NOT EXISTS numero_emenda TEXT,
+  ADD COLUMN IF NOT EXISTS valor_resto_inscrito NUMERIC(15,2),
+  ADD COLUMN IF NOT EXISTS valor_resto_cancelado NUMERIC(15,2),
+  ADD COLUMN IF NOT EXISTS valor_resto_pago NUMERIC(15,2);
+
 -- 6. Perfil de filiação partidária (dados agregados TSE)
 CREATE TABLE IF NOT EXISTS fato_perfil_filiacao_partidaria (
   id BIGSERIAL PRIMARY KEY,
