@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL TSE Perfil Filiação Partidária - Brasil Data Hub
+ETL TSE Perfil Filiação Partidária - BrasilDataHub
 Popula fato_perfil_filiacao_partidaria com dados agregados de filiados.
 Fonte: TSE perfil_filiacao_partidaria (atualização semanal)
 """

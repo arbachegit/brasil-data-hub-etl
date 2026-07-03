@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL Políticos e Mandatos - Brasil Data Hub
+ETL Políticos e Mandatos - BrasilDataHub
 Fontes: TSE (Dados Abertos CSV), Câmara dos Deputados API, Senado Federal API
 
 Busca 100% dos dados de candidaturas e mandatos políticos brasileiros.
@@ -769,7 +769,7 @@ def fetch_senadores_senado():
 if __name__ == "__main__":
     inicio = datetime.now()
     print("=" * 60)
-    print("ETL POLÍTICOS E MANDATOS - Brasil Data Hub")
+    print("ETL POLÍTICOS E MANDATOS - BrasilDataHub")
     print(f"Início: {inicio.strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 

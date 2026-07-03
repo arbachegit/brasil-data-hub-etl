@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL TSE Receitas de Campanha - Brasil Data Hub
+ETL TSE Receitas de Campanha - BrasilDataHub
 Popula fato_receitas_campanha com doações recebidas por candidatos.
 Fonte: TSE prestacao_contas (2006-2024)
 

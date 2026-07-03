@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL TSE Bens de Candidato - Brasil Data Hub
+ETL TSE Bens de Candidato - BrasilDataHub
 Popula fato_bens_candidato com declarações de bens dos candidatos.
 Fonte: TSE bem_candidato (2006-2024)
 """

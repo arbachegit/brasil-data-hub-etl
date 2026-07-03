@@ -1,10 +1,11 @@
 #!/bin/bash
+set -euo pipefail
 
-SUPABASE_URL="https://mnfjkegtynjtgesfphge.supabase.co"
-SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uZmprZWd0eW5qdGdlc2ZwaGdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzEyNDg3OSwiZXhwIjoyMDUyNzAwODc5fQ.JVPvNem8CJkFrYuBvMs-xTLHFVQuzC9r-iO_V_Lb3AY"
+: "${SUPABASE_URL:?Set SUPABASE_URL before running this script}"
+: "${SUPABASE_KEY:?Set SUPABASE_KEY before running this script}"
 
 echo "=============================================="
-echo "ETL COMPLETO - Brasil Data Hub"
+echo "ETL COMPLETO - BrasilDataHub"
 echo "=============================================="
 
 insert_data() {

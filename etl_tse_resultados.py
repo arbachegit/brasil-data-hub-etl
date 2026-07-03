@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL TSE Resultados - Brasil Data Hub
+ETL TSE Resultados - BrasilDataHub
 Enriquece fato_politicos_mandatos com votos_nominais e percentual_votos.
 Fonte: TSE votacao_candidato_munzona (1998-2024)
 """

@@ -81,7 +81,7 @@ def analyze_nulls(rows):
 
 def main():
     print("=" * 90)
-    print("  NULL PERCENTAGE REPORT - Brasil Data Hub")
+    print("  NULL PERCENTAGE REPORT - BrasilDataHub")
     print("=" * 90)
 
     summary = []

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL Votações Legislativas - Brasil Data Hub
+ETL Votações Legislativas - BrasilDataHub
 Popula fato_votos_legislativos com votos nominais de deputados e senadores.
 Fontes: Câmara dos Deputados API + Senado Federal API
 """

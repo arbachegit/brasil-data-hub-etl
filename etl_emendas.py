@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ETL Emendas Parlamentares - Brasil Data Hub
+ETL Emendas Parlamentares - BrasilDataHub
 Popula fato_emendas_parlamentares com dados do Portal da Transparência.
 Fonte: API Portal da Transparência (requer token gratuito)
 

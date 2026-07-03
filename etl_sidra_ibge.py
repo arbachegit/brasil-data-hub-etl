@@ -11,8 +11,8 @@ from datetime import datetime
 import time
 
 # Configuração Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL", "https://mnfjkegtynjtgesfphge.supabase.co")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uZmprZWd0eW5qdGdlc2ZwaGdlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODY1MjI4MiwiZXhwIjoyMDg0MjI4MjgyfQ.g0AblWCI4SL5US0KTL_0OXdYGdJaFTYabN_7Rz-gv7A")
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
